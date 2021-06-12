@@ -1,1 +1,1 @@
-# Salesforce-invoke Lambda Function
+# Serverless-http Lambda Function

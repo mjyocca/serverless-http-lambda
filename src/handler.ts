@@ -1,11 +1,16 @@
 import serverless from 'serverless-http';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { App } from '@tinyhttp/app';
+import type { Request } from '@tinyhttp/app';
 import bodyParser from 'body-parser';
 import 'source-map-support/register';
 
-import dotenv from 'dotenv';
-if (process.env.NODE_ENV !== 'production') dotenv.config();
-const PORT = process.env.PORT || 5000;
+interface LambdaRequest extends Request {
+  serverless: {
+    event: APIGatewayProxyEvent,
+    context: Context
+  }
+}
 
 const app = new App();
 
@@ -16,12 +21,27 @@ app.get('/', (_req, res) => {
   res.send('hi :), I see you')
 });
 
-app.post('/', ({ body }, res) => res.json(body));
+app.post('/', ({ serverless, body }: LambdaRequest, res) => {
+  res.json({serverless, body})
+});
 
+// Cache
+let handler;
 
-if (process.env.LOCAL) {
-  app.listen(PORT as number, () => console.log(`listening on port:${PORT}, 🔥 http://localhost:${PORT} 🔥`))
+export default {
+  /* Lambda handler function */
+  handler: async (event: APIGatewayProxyEvent, context: Context): Promise<APIGatewayProxyResult> => {
+    if (!handler) {
+      handler = serverless(app.handler.bind(app), {
+        request: (request) => {
+          request.serverless = { event, context };
+        }
+      });
+    }
+    const result = await handler(event, context);
+    return result;
+  },
+  app
 }
 
-/* Lambda handler function */
-export const handler = serverless(app.handler.bind(app));
+module.exports = module.exports.default;
